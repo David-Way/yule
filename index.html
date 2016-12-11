@@ -3,13 +3,21 @@
 <script src="vendor/require.js/require.js"></script>
 <script src="vendor/three.js/examples/js/Detector.js"></script>
 <script src="vendor/threex.windowresize.js"></script>
-<body style='margin: 0px; background-color: #bbbbbb; overflow: hidden;'><script>
+<!-- Shaders -->
+<script data-src="shaders/displacement_vertex.js" data-name="Displacement" type="x-shader/x-vertex"></script>
+<script data-src="shaders/displacement_fragment.js" data-name="Displacement" type="x-shader/x-fragment"></script>
+<script data-src="shaders/noise_vertex.js" data-name="Noise" type="x-shader/x-vertex"></script>
+<script data-src="shaders/noise_fragment.js" data-name="Noise" type="x-shader/x-fragment"></script>
+<!-- End Shaders -->
+
+<body style='margin: 0px; background-color: #bbbbbb; overflow: hidden;'>
+<script>
 require([], function(){
 	// detect WebGL
 	if( !Detector.webgl ){
 		Detector.addGetWebGLMessage();
 		throw 'WebGL Not Available'
-	} 
+	}
 	// setup webgl renderer full page
 	var renderer	= new THREE.WebGLRenderer();
 	renderer.setSize( window.innerWidth, window.innerHeight );
@@ -28,7 +36,7 @@ require([], function(){
 	//////////////////////////////////////////////////////////////////////////////////
 	//		default 3 points lightning					//
 	//////////////////////////////////////////////////////////////////////////////////
-	
+
 	var ambientLight= new THREE.AmbientLight( 0x020202 )
 	scene.add( ambientLight)
 	var frontLight	= new THREE.DirectionalLight('white', 1)
@@ -36,42 +44,97 @@ require([], function(){
 	scene.add( frontLight )
 	var backLight	= new THREE.DirectionalLight('white', 0.75)
 	backLight.position.set(-0.5, -0.5, -2)
-	scene.add( backLight )		
+	scene.add( backLight )
 
 	//////////////////////////////////////////////////////////////////////////////////
 	//		add an object and make it move					//
-	//////////////////////////////////////////////////////////////////////////////////	
+	//////////////////////////////////////////////////////////////////////////////////
 	var geometry	= new THREE.CubeGeometry( 1, 1, 1);
 	var material	= new THREE.MeshPhongMaterial();
 	var mesh	= new THREE.Mesh( geometry, material );
 	scene.add( mesh );
-	
+
 	onRenderFcts.push(function(delta, now){
-		mesh.rotateX(0.5 * delta);
-		mesh.rotateY(2.0 * delta);		
+		mesh.rotateX(0.00005 * rotation);
+		if (rotation > 0) {
+			rotation = rotation - friction;
+		} else {
+			rotation = 0;
+		}
+		// mesh.rotateY(2.0 * delta);
 	})
-	
+
 	//////////////////////////////////////////////////////////////////////////////////
 	//		Camera Controls							//
 	//////////////////////////////////////////////////////////////////////////////////
-	var mouse	= {x : 0, y : 0}
-	document.addEventListener('mousemove', function(event){
-		mouse.x	= (event.clientX / window.innerWidth ) - 0.5
-		mouse.y	= (event.clientY / window.innerHeight) - 0.5
-	}, false)
-	onRenderFcts.push(function(delta, now){
-		camera.position.x += (mouse.x*5 - camera.position.x) * (delta*3)
-		camera.position.y += (mouse.y*5 - camera.position.y) * (delta*3)
-		camera.lookAt( scene.position )
-	})
+	// var mouse	= {x : 0, y : 0}
+	// document.addEventListener('mousemove', function(event){
+	// 	mouse.x	= (event.clientX / window.innerWidth ) - 0.5
+	// 	mouse.y	= (event.clientY / window.innerHeight) - 0.5
+	// }, false)
+	// onRenderFcts.push(function(delta, now){
+	// 	camera.position.x += (mouse.x*5 - camera.position.x) * (delta*3)
+	// 	camera.position.y += (mouse.y*5 - camera.position.y) * (delta*3)
+	// 	camera.lookAt( scene.position )
+	// })
+	var isDragging = false;
+	var rotation = 0;
+	friction = 5;
+	var body = document.body;
+	var lastX = 0;
+	var lastY = 0;
+
+	var properties = {
+		smoke: 1.2,
+		heat: 0.0185,
+		shapeBiasX: 0.23,
+		shapeBiasY:0.88,
+		displacementScale:22,
+		displacementBias:-22,
+		turbulence:0,
+		twist:0,
+		intensity:1.0,
+		wireframes:false
+	}
+
+  body.addEventListener('mousedown', function(e){
+		isDragging = true;
+		console.log(mesh);
+	});
+	body.addEventListener('mouseup', function(e) {
+		isDragging = false;
+	});
+	body.addEventListener('mousemove', function(e){
+		if (isDragging) {
+			var curX = e.clientX,
+          curY = e.clientY,
+          rotateCSS = 'rotate(' + rotation + 'deg)';
+
+				if (rotation > 36000) {
+					rotation = 0;
+				} else {
+					rotation += getDistance(curX,curY,lastX,lastY);
+				}
+
+				//
+
+				lastX = curX;
+        lastY = curY;
+		}
+	});
+
+	var getDistance = function ( x1, y1, x2, y2 ) {
+    return Math.sqrt((x1-x2) * (x1-x2) + (y2-y1) * (y2-y1));
+	}
+
 
 	//////////////////////////////////////////////////////////////////////////////////
 	//		render the scene						//
 	//////////////////////////////////////////////////////////////////////////////////
 	onRenderFcts.push(function(){
-		renderer.render( scene, camera );		
+		renderer.render( scene, camera );
 	})
-	
+
 	//////////////////////////////////////////////////////////////////////////////////
 	//		Rendering Loop runner						//
 	//////////////////////////////////////////////////////////////////////////////////
@@ -80,12 +143,14 @@ require([], function(){
 		// keep looping
 		requestAnimationFrame( animate );
 		// measure time
-		lastTimeMsec	= lastTimeMsec || nowMsec-1000/60
-		var deltaMsec	= Math.min(200, nowMsec - lastTimeMsec)
-		lastTimeMsec	= nowMsec
+		lastTimeMsec	= lastTimeMsec || nowMsec-1000/60;
+		var deltaMsec	= Math.min(200, nowMsec - lastTimeMsec);
+		lastTimeMsec	= nowMsec;
+		//console.log('isDragging', isDragging);
+		console.log('rotation', rotation);
 		// call each update function
 		onRenderFcts.forEach(function(onRenderFct){
-			onRenderFct(deltaMsec/1000, nowMsec/1000)
+			onRenderFct(deltaMsec/1000, nowMsec/1000);
 		})
 	})
 })
